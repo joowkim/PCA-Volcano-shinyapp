@@ -1,0 +1,10 @@
+SampleID,Condition,Batch
+Ctrl_1,Control,A
+Ctrl_2,Control,A
+Ctrl_3,Control,B
+Treat_1,Treatment,A
+Treat_2,Treatment,B
+Treat_3,Treatment,B
+KO_1,KO,A
+KO_2,KO,B
+KO_3,KO,B
