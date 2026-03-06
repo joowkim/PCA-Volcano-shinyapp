@@ -1,0 +1,71 @@
+# PCA & Volcano Plot Shiny App
+
+A Shiny web application for interactive bioinformatics visualization — PCA plots and Volcano plots for differential expression analyses.
+
+## Features
+
+### Volcano Plot
+- Upload CSV or TSV output from DESeq2, edgeR, limma, etc.
+- Auto-detects log2FC and p-value columns
+- Adjustable p-value and log2FC thresholds
+- Points colored by significance (Up / Down / NS)
+- Download plot as PNG
+
+### PCA Plot
+- Upload an expression matrix (features × samples) and a metadata CSV
+- Auto-runs PCA with optional log2(x+1) transformation and feature scaling
+- Color points by any metadata column (e.g. condition, batch)
+- Toggle sample labels on/off
+- Select which PCs to plot on each axis (% variance explained shown)
+- Download plot as PNG
+
+## Running the App
+
+```r
+shiny::runApp()
+```
+
+## Input File Formats
+
+### Volcano Plot
+A CSV or TSV with at least one log2 fold change column and one p-value column.
+
+| gene | log2FoldChange | pvalue | padj |
+|------|---------------|--------|------|
+| GeneA | 2.3 | 0.001 | 0.01 |
+| GeneB | -1.5 | 0.03 | 0.08 |
+
+### PCA Plot — Expression Matrix
+Rows = features (genes), columns = samples. First column = feature IDs.
+
+| GeneID | Sample1 | Sample2 | Sample3 |
+|--------|---------|---------|---------|
+| Gene1  | 1020    | 980     | 1050    |
+| Gene2  | 130     | 115     | 140     |
+
+### PCA Plot — Metadata
+One row per sample. Must include a column of sample IDs matching the expression matrix column names.
+
+| SampleID | Condition | Batch |
+|----------|-----------|-------|
+| Sample1  | Control   | A     |
+| Sample2  | Treatment | A     |
+
+Toy datasets (`toy_expression.csv`, `toy_metadata.csv`) are included for testing.
+
+## Requirements
+
+- R (≥ 4.0)
+- shiny
+- ggplot2
+- readr
+
+Install dependencies:
+
+```r
+install.packages(c("shiny", "ggplot2", "readr"))
+```
+
+## License
+
+MIT
