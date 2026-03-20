@@ -286,7 +286,7 @@ server <- function(input, output, session) {
     }
 
     if (isTRUE(input$pca_labels)) {
-      p <- p + geom_text(aes(label = sample_id), vjust = -0.7, size = 3, show.legend = FALSE)
+      p <- p + geom_text_repel(aes(label = sample_id), size = 3, max.overlaps = Inf, show.legend = FALSE)
     }
     p
   })
