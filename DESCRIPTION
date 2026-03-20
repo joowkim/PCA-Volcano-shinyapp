@@ -1,0 +1,8 @@
+Package: PCAVolcanoApp
+Title: PCA and Volcano Plot Shiny App
+Version: 1.0
+Imports:
+  shiny,
+  ggplot2,
+  ggrepel,
+  readr
