@@ -8,20 +8,26 @@ A Shiny web application for interactive bioinformatics visualization — PCA plo
 
 ### Volcano Plot
 - Upload CSV or TSV output from DESeq2, edgeR, limma, etc.
-- Auto-detects log2FC and p-value columns
+- Auto-detects log2FC, p-value, and gene name columns
 - Adjustable p-value and log2FC thresholds
 - Points colored by significance (Up / Down / NS)
-- Download plot as PNG
+- Label top N most significant genes (via ggrepel)
+- Custom plot title
+- Download plot as PNG or SVG
 
 ### PCA Plot
 - Upload an expression matrix (features × samples) and a metadata CSV
-- Auto-runs PCA with optional log2(x+1) transformation and feature scaling
-- Color points by any metadata column (e.g. condition, batch)
+- Auto-runs PCA with optional log2 transformation (configurable pseudocount) and feature scaling
+- Color and shape points by any metadata column (e.g. condition, batch)
 - Toggle sample labels on/off
 - Select which PCs to plot on each axis (% variance explained shown)
-- Download plot as PNG
+- Custom plot title
+- Download plot as PNG or SVG
 
-## Running the App
+### General
+- "Load toy data" button on each tab for instant demo without uploading files
+
+## Running the App Locally
 
 ```r
 shiny::runApp()
@@ -53,19 +59,20 @@ One row per sample. Must include a column of sample IDs matching the expression 
 | Sample1  | Control   | A     |
 | Sample2  | Treatment | A     |
 
-Toy datasets (`toy_expression.csv`, `toy_metadata.csv`) are included for testing.
+Toy datasets (`toy_expression.csv`, `toy_metadata.csv`, `toy_de_results.csv`) are included for testing.
 
 ## Requirements
 
 - R (≥ 4.0)
 - shiny
 - ggplot2
+- ggrepel
 - readr
 
 Install dependencies:
 
 ```r
-install.packages(c("shiny", "ggplot2", "readr"))
+install.packages(c("shiny", "ggplot2", "ggrepel", "readr"))
 ```
 
 ## License
