@@ -2,6 +2,8 @@
 
 A Shiny web application for interactive bioinformatics visualization — PCA plots and Volcano plots for differential expression analyses.
 
+**Live app:** https://jwkim0.shinyapps.io/PCA-Volcano-shinyapp/
+
 ## Features
 
 ### Volcano Plot
