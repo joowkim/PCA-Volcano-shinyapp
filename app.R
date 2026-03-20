@@ -1,5 +1,6 @@
 library(shiny)
 library(ggplot2)
+library(ggrepel)
 library(readr)
 
 guess_col <- function(names, patterns) {
@@ -15,12 +16,17 @@ ui <- fluidPage(
     tabPanel("Volcano Plot",
       sidebarLayout(
         sidebarPanel(
+          actionButton("load_toy_volcano", "Load toy data", class = "btn-sm btn-default"),
+          hr(),
           fileInput("file", "Upload CSV or TSV file",
                     accept = c(".csv", ".tsv", ".txt")),
           uiOutput("col_selectors"),
           numericInput("pval_cutoff", "P-value cutoff", value = 0.05, min = 0, max = 1, step = 0.01),
           numericInput("lfc_cutoff", "log2FC cutoff (±)", value = 1.0, min = 0, step = 0.1),
-          downloadButton("download_volcano", "Download PNG")
+          numericInput("top_n_labels", "Label top N genes (0 = none)", value = 10, min = 0, step = 1),
+          textInput("volcano_title", "Plot title", value = ""),
+          downloadButton("download_volcano", "Download PNG"),
+          downloadButton("download_volcano_svg", "Download SVG")
         ),
         mainPanel(
           plotOutput("volcano", height = "600px")
@@ -32,6 +38,8 @@ ui <- fluidPage(
     tabPanel("PCA Plot",
       sidebarLayout(
         sidebarPanel(
+          actionButton("load_toy_pca", "Load toy data", class = "btn-sm btn-default"),
+          hr(),
           fileInput("pca_expr_file", "Upload expression matrix CSV",
                     accept = ".csv"),
           helpText("Rows = features (genes), columns = samples. First column = feature IDs."),
@@ -39,7 +47,9 @@ ui <- fluidPage(
                     accept = ".csv"),
           helpText("Must contain a column of sample IDs matching expression matrix column names."),
           uiOutput("pca_controls"),
-          downloadButton("download_pca", "Download PNG")
+          textInput("pca_title", "Plot title", value = ""),
+          downloadButton("download_pca", "Download PNG"),
+          downloadButton("download_pca_svg", "Download SVG")
         ),
         mainPanel(
           uiOutput("pca_error_ui"),
@@ -54,24 +64,33 @@ server <- function(input, output, session) {
 
   # ── Volcano ──────────────────────────────────────────────────────────────────
 
-  data <- reactive({
-    req(input$file)
+  data <- reactiveVal(NULL)
+
+  # Load from file upload
+  observeEvent(input$file, {
     ext <- tools::file_ext(input$file$name)
     if (ext == "tsv" || ext == "txt") {
-      read_tsv(input$file$datapath, show_col_types = FALSE)
+      data(read_tsv(input$file$datapath, show_col_types = FALSE))
     } else {
-      read_csv(input$file$datapath, show_col_types = FALSE)
+      data(read_csv(input$file$datapath, show_col_types = FALSE))
     }
+  })
+
+  # Load toy DE results bundled with the app
+  observeEvent(input$load_toy_volcano, {
+    data(read_csv("toy_de_results.csv", show_col_types = FALSE))
   })
 
   output$col_selectors <- renderUI({
     req(data())
     nms <- names(data())
-    lfc_default  <- guess_col(nms, c("log2FoldChange", "log2FC", "logFC", "lfc"))
-    pval_default <- guess_col(nms, c("padj", "FDR", "adj.*p", "pvalue", "pval", "p\\.value", "p_value"))
+    lfc_default   <- guess_col(nms, c("log2FoldChange", "log2FC", "logFC", "lfc"))
+    pval_default  <- guess_col(nms, c("padj", "FDR", "adj.*p", "pvalue", "pval", "p\\.value", "p_value"))
+    label_default <- guess_col(nms, c("gene", "symbol", "name", "id", "feature"))
     tagList(
-      selectInput("lfc_col",  "log2FC column",  choices = nms, selected = lfc_default),
-      selectInput("pval_col", "P-value column", choices = nms, selected = pval_default)
+      selectInput("lfc_col",   "log2FC column",     choices = nms, selected = lfc_default),
+      selectInput("pval_col",  "P-value column",    choices = nms, selected = pval_default),
+      selectInput("label_col", "Gene name column",  choices = nms, selected = label_default)
     )
   })
 
@@ -93,7 +112,7 @@ server <- function(input, output, session) {
   make_volcano <- reactive({
     req(volcano_data())
     df <- volcano_data()
-    ggplot(df, aes(x = lfc, y = neg_log10_p, color = category)) +
+    p <- ggplot(df, aes(x = lfc, y = neg_log10_p, color = category)) +
       geom_point(alpha = 0.6, size = 1.5) +
       scale_color_manual(values = c(Up = "#d62728", Down = "#1f77b4", NS = "grey60"),
                          name = NULL) +
@@ -101,8 +120,21 @@ server <- function(input, output, session) {
                  linetype = "dashed", color = "black", linewidth = 0.4) +
       geom_hline(yintercept = -log10(input$pval_cutoff),
                  linetype = "dashed", color = "black", linewidth = 0.4) +
-      labs(x = input$lfc_col, y = paste0("-log\u2081\u2080(", input$pval_col, ")")) +
+      labs(x = input$lfc_col, y = paste0("-log\u2081\u2080(", input$pval_col, ")"),
+           title = input$volcano_title) +
       theme_bw(base_size = 14)
+
+    # Label top N genes by significance (smallest p-value), skipping if N = 0 or no label column
+    n <- as.integer(input$top_n_labels)
+    if (!is.null(input$label_col) && input$label_col %in% names(df) && n > 0) {
+      top <- head(df[order(df$pval), ], n)
+      p <- p + geom_text_repel(
+        data = top,
+        aes(label = .data[[input$label_col]]),
+        size = 3, max.overlaps = Inf, show.legend = FALSE
+      )
+    }
+    p
   })
 
   output$volcano <- renderPlot({ make_volcano() })
@@ -112,16 +144,28 @@ server <- function(input, output, session) {
     content  = function(file) ggsave(file, plot = make_volcano(), width = 8, height = 6, dpi = 150)
   )
 
+  output$download_volcano_svg <- downloadHandler(
+    filename = function() "volcano_plot.svg",
+    content  = function(file) ggsave(file, plot = make_volcano(), width = 8, height = 6)
+  )
+
   # ── PCA ──────────────────────────────────────────────────────────────────────
 
-  pca_expr <- reactive({
-    req(input$pca_expr_file)
-    read_csv(input$pca_expr_file$datapath, show_col_types = FALSE)
+  pca_expr <- reactiveVal(NULL)
+  pca_meta <- reactiveVal(NULL)
+
+  # Load from file uploads
+  observeEvent(input$pca_expr_file, {
+    pca_expr(read_csv(input$pca_expr_file$datapath, show_col_types = FALSE))
+  })
+  observeEvent(input$pca_meta_file, {
+    pca_meta(read_csv(input$pca_meta_file$datapath, show_col_types = FALSE))
   })
 
-  pca_meta <- reactive({
-    req(input$pca_meta_file)
-    read_csv(input$pca_meta_file$datapath, show_col_types = FALSE)
+  # Load toy datasets bundled with the app
+  observeEvent(input$load_toy_pca, {
+    pca_expr(read_csv("toy_expression.csv", show_col_types = FALSE))
+    pca_meta(read_csv("toy_metadata.csv",   show_col_types = FALSE))
   })
 
   # Validation: check that sample IDs match exactly
@@ -172,9 +216,10 @@ server <- function(input, output, session) {
     tagList(
       selectInput("pca_id_col",    "Sample ID column (metadata)", choices = meta_cols),
       selectInput("pca_color_col", "Color points by",             choices = meta_cols),
+      selectInput("pca_shape_col", "Shape points by",             choices = c("None", meta_cols)),
       selectInput("pca_x", "X axis", choices = pc_choices, selected = "PC1"),
       selectInput("pca_y", "Y axis", choices = pc_choices, selected = "PC2"),
-      checkboxInput("pca_log2",   "Apply log2(x + 1)", value = FALSE),
+      numericInput("pca_log2_pseudo", "log2 pseudocount (0 = no transform)", value = 0, min = 0, step = 0.01),
       checkboxInput("pca_scale",  "Scale features",    value = TRUE),
       checkboxInput("pca_labels", "Show sample labels", value = FALSE)
     )
@@ -193,7 +238,9 @@ server <- function(input, output, session) {
     mat <- t(mat)
     storage.mode(mat) <- "numeric"
 
-    if (isTRUE(input$pca_log2)) mat <- log2(mat + 1)
+    if (!is.null(input$pca_log2_pseudo) && input$pca_log2_pseudo > 0) {
+      mat <- log2(mat + input$pca_log2_pseudo)
+    }
 
     # Remove features with zero variance
     mat <- mat[, apply(mat, 2, var) > 0, drop = FALSE]
@@ -229,8 +276,14 @@ server <- function(input, output, session) {
       geom_point(size = 3, alpha = 0.85) +
       labs(x = paste0(input$pca_x, " (", x_pct, "%)"),
            y = paste0(input$pca_y, " (", y_pct, "%)"),
-           color = input$pca_color_col) +
+           color = input$pca_color_col,
+           title = input$pca_title) +
       theme_bw(base_size = 14)
+
+    if (!is.null(input$pca_shape_col) && input$pca_shape_col != "None") {
+      p <- p + aes(shape = .data[[input$pca_shape_col]]) +
+               scale_shape_discrete(name = input$pca_shape_col)
+    }
 
     if (isTRUE(input$pca_labels)) {
       p <- p + geom_text(aes(label = sample_id), vjust = -0.7, size = 3, show.legend = FALSE)
@@ -246,6 +299,11 @@ server <- function(input, output, session) {
   output$download_pca <- downloadHandler(
     filename = function() "pca_plot.png",
     content  = function(file) ggsave(file, plot = make_pca(), width = 8, height = 6, dpi = 150)
+  )
+
+  output$download_pca_svg <- downloadHandler(
+    filename = function() "pca_plot.svg",
+    content  = function(file) ggsave(file, plot = make_pca(), width = 8, height = 6)
   )
 }
 
